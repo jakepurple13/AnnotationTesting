@@ -20,5 +20,9 @@
         <module name="processor" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="dslannotations" target="1.7" />
+      <module name="newtestprocessor" target="1.7" />
+    </bytecodeTargetLevel>
   </component>
 </project>

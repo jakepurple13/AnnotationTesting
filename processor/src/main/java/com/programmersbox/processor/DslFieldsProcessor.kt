@@ -2,10 +2,13 @@ package com.programmersbox.processor
 
 
 import com.google.auto.service.AutoService
+import com.programmersbox.dslannotations.DslField
+import com.programmersbox.dslannotations.DslFieldMarker
 import com.programmersbox.processor.APUtils.GetClassValue
 import com.programmersbox.processor.APUtils.getTypeMirrorFromAnnotationValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import me.eugeniomarletti.kotlin.metadata.kotlinMetadata
 import me.eugeniomarletti.kotlin.metadata.shadow.name.FqName
 import me.eugeniomarletti.kotlin.metadata.shadow.platform.JavaToKotlinClassMap
 import java.io.File
@@ -15,6 +18,7 @@ import javax.lang.model.element.Element
 import javax.lang.model.element.ElementKind
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
+import javax.lang.model.type.DeclaredType
 import javax.lang.model.type.MirroredTypeException
 import javax.lang.model.type.MirroredTypesException
 import javax.lang.model.type.TypeMirror
@@ -85,6 +89,15 @@ class DslFieldsProcessor : AbstractProcessor() {
             .builder(variable.getAnnotation(DslField::class.java).name)
             .addModifiers(KModifier.PUBLIC)
             .receiver(variable.enclosingElement.asType().asTypeName())
+            .also { builder ->
+                try {
+                    (variable.enclosingElement as? TypeElement)
+                        ?.typeParameters
+                        ?.map { TypeVariableName(it.simpleName.toString()) }
+                        ?.let { builder.addTypeVariables(it) }
+                } catch (e: Exception) {
+                }
+            }
         try {
             val a: DslField = variable.getAnnotation(DslField::class.java)
             getTypeMirrorFromAnnotationValue(object : GetClassValue {
@@ -150,7 +163,7 @@ fun TypeName.javaToKotlinType(): TypeName {
     }
 }
 
-private fun TypeName.javaToKotlinType2(): TypeName {
+fun TypeName.javaToKotlinType2(): TypeName {
     return when (this) {
         is ParameterizedTypeName ->
             (rawType.javaToKotlinType2() as ClassName).parameterizedBy(*typeArguments.map { it.javaToKotlinType2() }.toTypedArray())

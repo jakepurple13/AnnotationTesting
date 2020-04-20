@@ -1,3 +1,5 @@
+include ':dslannotations'
+include ':newtestprocessor'
 include ':newtesthingy'
 include ':processor'
 include ':app'

@@ -4,7 +4,7 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import com.programmersbox.annotationtesting.next.TestDsls
 import com.programmersbox.annotationtesting.next.*
-import com.programmersbox.processor.DslField
+import com.programmersbox.dslannotations.DslField
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -23,7 +23,12 @@ class MainActivity : AppCompatActivity() {
             actionRun { println("World") }
         }
 
+        NewDsl<Int>().apply {
+
+        }
+
     }
+
 }
 
 @DslMarker
