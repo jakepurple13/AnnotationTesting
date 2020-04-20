@@ -31,22 +31,19 @@ class DslFieldsProcessor : AbstractProcessor() {
     }
 
     override fun process(annotations: MutableSet<out TypeElement>, roundEnv: RoundEnvironment): Boolean {
-
-        var packageName = ""
-
         val functions = roundEnv.getElementsAnnotatedWith(DslField::class.java).mapNotNull { methodElement ->
             //println("--------------------------------------------")
-            //println("$methodElement | ${methodElement.kind}")
 
             if (methodElement.kind != ElementKind.FIELD) {
                 processingEnv.messager.errormessage { "Can only be applied to functions,  element: $methodElement " }
                 return false
             }
 
-            (methodElement as? VariableElement)?.let {
-                packageName = processingEnv.elementUtils.getPackageOf(methodElement).toString()
-                generateNewMethod(it)
-            }
+            val spec = (methodElement as? VariableElement)?.let { generateNewMethod(it) }
+
+            if (spec != null) {
+                processingEnv.elementUtils.getPackageOf(methodElement).toString() to spec
+            } else null
         }
 
         val generatedSourcesRoot: String = processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME].orEmpty()
@@ -59,18 +56,24 @@ class DslFieldsProcessor : AbstractProcessor() {
 
         if (functions.isNotEmpty()) {
 
-            val file = File(generatedSourcesRoot)
-            if (!file.exists()) file.mkdir()
-            val fileBuilder = FileSpec.builder(
-                packageName,
-                "DslFieldsGenerated"
-            )
+            val packageGroup = functions.groupBy { it.first }
 
-            functions.forEach { fileBuilder.addFunction(it) }
-            fileBuilder
-                .build()
-                //.also { println(it.toString()) }
-                .writeTo(file)
+            for (g in packageGroup.entries.withIndex()) {
+
+                val file = File(generatedSourcesRoot)
+                if (!file.exists()) file.mkdir()
+                val fileBuilder = FileSpec.builder(
+                    g.value.key,
+                    "DslFieldsGenerated${g.index}"
+                )
+
+                g.value.value.forEach { fileBuilder.addFunction(it.second) }
+                fileBuilder
+                    .build()
+                    //.also { println(it.toString()) }
+                    .writeTo(file)
+
+            }
 
         }
 

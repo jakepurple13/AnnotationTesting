@@ -2,6 +2,8 @@ package com.programmersbox.annotationtesting
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import com.programmersbox.annotationtesting.next.TestDsls
+import com.programmersbox.annotationtesting.next.*
 import com.programmersbox.processor.DslField
 
 class MainActivity : AppCompatActivity() {
@@ -10,6 +12,12 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         TestDsl().apply {
+            paramStuffThree { "$it" }
+            testingThing { println("Hello") }
+            actionRun { println("World") }
+        }
+
+        TestDsls().apply {
             paramStuffThree { "$it" }
             testingThing { println("Hello") }
             actionRun { println("World") }
