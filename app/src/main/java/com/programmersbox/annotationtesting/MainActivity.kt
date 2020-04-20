@@ -10,21 +10,41 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         TestDsl().apply {
-
+            paramStuffThree { "$it" }
+            testingThing { println("Hello") }
+            actionRun { println("World") }
         }
 
     }
 }
 
+@DslMarker
+annotation class CustomDslMarker
+
+@DslMarker
+annotation class CustomizeDslMarker
+
 class TestDsl {
 
-    @DslField(name = "testingThing")
-    private var testThing: () -> Unit = {}
+    @DslField(name = "testingThing", dslMarker = CustomDslMarker::class)
+    var testThing: () -> Unit = {}
 
-    @DslField(name = "actionRun")
+    @DslField(name = "actionRun", dslMarker = CustomizeDslMarker::class)
     var runAction: () -> Unit = {}
 
     @DslField(name = "itemNumber")
-    private var numberItem = 4
+    var numberItem = 4
+
+    @DslField(name = "paramStuffOne")
+    var paramOne: (Int, String) -> Unit = { _, _ -> }
+
+    @DslField(name = "paramStuffTwo")
+    var paramTwo: (Int) -> Unit = {}
+
+    @DslField(name = "paramStuffThree")
+    var paramThree: (Int) -> String = { "$it" }
+
+    @DslField(name = "paramStuffFour")
+    var paramFour = fun(_: Int) = Unit
 
 }

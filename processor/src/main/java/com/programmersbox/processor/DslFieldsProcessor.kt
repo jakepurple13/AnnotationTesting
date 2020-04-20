@@ -2,17 +2,24 @@ package com.programmersbox.processor
 
 
 import com.google.auto.service.AutoService
-import com.squareup.kotlinpoet.FileSpec
-import com.squareup.kotlinpoet.FunSpec
-import com.squareup.kotlinpoet.KModifier
-import com.squareup.kotlinpoet.asTypeName
+import com.programmersbox.processor.APUtils.GetClassValue
+import com.programmersbox.processor.APUtils.getTypeMirrorFromAnnotationValue
+import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import me.eugeniomarletti.kotlin.metadata.shadow.name.FqName
+import me.eugeniomarletti.kotlin.metadata.shadow.platform.JavaToKotlinClassMap
 import java.io.File
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
+import javax.lang.model.element.Element
 import javax.lang.model.element.ElementKind
-import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
+import javax.lang.model.type.MirroredTypeException
+import javax.lang.model.type.MirroredTypesException
+import javax.lang.model.type.TypeMirror
+import kotlin.reflect.KClass
+
 
 @AutoService(Processor::class)
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
@@ -24,41 +31,12 @@ class DslFieldsProcessor : AbstractProcessor() {
     }
 
     override fun process(annotations: MutableSet<out TypeElement>, roundEnv: RoundEnvironment): Boolean {
-        println("WE ARE HERE!!!")
-        roundEnv.getElementsAnnotatedWith(DslField::class.java).forEach { methodElement ->
-            println("$methodElement | ${methodElement.kind}")
 
-
-
-            if (methodElement.kind != ElementKind.FIELD) {
-                processingEnv.messager.errormessage { "Can only be applied to functions,  element: $methodElement " }
-                return false
-            }
-
-            (methodElement as? ExecutableElement)?.parameters?.forEach { variableElement ->
-                println("We are here now")
-                generateNewMethod(methodElement, variableElement, processingEnv.elementUtils.getPackageOf(methodElement).toString())
-            }
-
-            println(methodElement::class.java.simpleName)
-
-            when (methodElement) {
-                is ExecutableElement -> println("Executable")
-                is VariableElement -> println("Variable")
-                is TypeElement -> println("Type")
-            }
-
-            (methodElement as? VariableElement)?.let {
-                println("We are here now")
-                generateNewMethod(it, processingEnv.elementUtils.getPackageOf(methodElement).toString())
-            }
-
-            //generateNewMethod(methodElement as VariableElement, processingEnv.elementUtils.getPackageOf(methodElement).toString())
-
-        }
+        var packageName = ""
 
         val functions = roundEnv.getElementsAnnotatedWith(DslField::class.java).mapNotNull { methodElement ->
-            println("$methodElement | ${methodElement.kind}")
+            //println("--------------------------------------------")
+            //println("$methodElement | ${methodElement.kind}")
 
             if (methodElement.kind != ElementKind.FIELD) {
                 processingEnv.messager.errormessage { "Can only be applied to functions,  element: $methodElement " }
@@ -66,79 +44,81 @@ class DslFieldsProcessor : AbstractProcessor() {
             }
 
             (methodElement as? VariableElement)?.let {
-                println("We are here now")
-                generateNewMethod(it, processingEnv.elementUtils.getPackageOf(methodElement).toString())
+                packageName = processingEnv.elementUtils.getPackageOf(methodElement).toString()
+                generateNewMethod(it)
             }
         }
 
         val generatedSourcesRoot: String = processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME].orEmpty()
         if (generatedSourcesRoot.isEmpty()) {
             processingEnv.messager.errormessage { "Can't find the target directory for generated Kotlin files." }
+            return false
         }
 
-        val file = File(generatedSourcesRoot)
-        if (!file.exists()) file.mkdir()
-        //val functionPackages = functions.groupBy {  }
-        FileSpec.builder("com.programmersbox.dslfields"/*processingEnv.elementUtils.getPackageOf(methodElement).toString()*/, "DslFieldsGenerated")
-            .apply { functions.forEach { addFunction(it) } }//.addFunction(funcBuilder.build())
-            .build()
-            .also { println(it.toString()) }
-            .writeTo(file)
+        //println(functions.joinToString("\n"))
+
+        if (functions.isNotEmpty()) {
+
+            val file = File(generatedSourcesRoot)
+            if (!file.exists()) file.mkdir()
+            val fileBuilder = FileSpec.builder(
+                packageName,
+                "DslFieldsGenerated"
+            )
+
+            functions.forEach { fileBuilder.addFunction(it) }
+            fileBuilder
+                .build()
+                //.also { println(it.toString()) }
+                .writeTo(file)
+
+        }
 
         return false
     }
 
-    private fun generateNewMethod(method: ExecutableElement, variable: VariableElement, packageOfMethod: String) {
-        println("$method\n$variable\n$packageOfMethod")
-        val generatedSourcesRoot: String = processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME].orEmpty()
-        if (generatedSourcesRoot.isEmpty()) {
-            processingEnv.messager.errormessage { "Can't find the target directory for generated Kotlin files." }
-            return
-        }
-
-        val variableAsElement = processingEnv.typeUtils.asElement(variable.asType())
-        //val fieldsInArgument = ElementFilter.fieldsIn(variableAsElement.enclosedElements)
-        //val annotationArgs = method.getAnnotation(DslField::class.java)//.viewIds
-
-        val funcBuilder = FunSpec
-            .builder("${variable.enclosingElement.simpleName}." + variable.getAnnotation(DslField::class.java).name)
-            .addModifiers(KModifier.PUBLIC)
-            .addAnnotation(DslFieldMarker::class.java)
-            .addParameter("block", variableAsElement.asType().asTypeName())
-            .addStatement("%S = block", variable.simpleName.toString())
-        val file = File(generatedSourcesRoot)
-        if (!file.exists()) file.mkdir()
-        FileSpec.builder(packageOfMethod, "DslFieldsGenerated")
-            .addFunction(funcBuilder.build())
-            .build()
-            .also { println(it.toString()) }
-            //.writeTo(file)
-            .writeTo(System.out)
-
-        println(file.readText())
-        println("Created")
-    }
-
-    private fun generateNewMethod(variable: VariableElement, packageOfMethod: String): FunSpec {
-        println("$variable\n$packageOfMethod")
-
-        val variableAsElement = processingEnv.typeUtils.asElement(variable.asType())
-        //val fieldsInArgument = ElementFilter.fieldsIn(variableAsElement.enclosedElements)
-        //val annotationArgs = method.getAnnotation(DslField::class.java)//.viewIds
-        println(variable.enclosingElement)
-        println(variableAsElement.asType().toString())
-        return FunSpec
+    private fun generateNewMethod(variable: VariableElement): FunSpec {
+        val builder = FunSpec
             .builder(variable.getAnnotation(DslField::class.java).name)
             .addModifiers(KModifier.PUBLIC)
             .receiver(variable.enclosingElement.asType().asTypeName())
-            .addAnnotation(DslFieldMarker::class.java)
-            .addParameter("block", variableAsElement.asType().asTypeName())
+        try {
+            val a: DslField = variable.getAnnotation(DslField::class.java)
+            getTypeMirrorFromAnnotationValue(object : GetClassValue {
+                override fun execute() {
+                    a.dslMarker
+                }
+            })?.forEach { it?.let { (it.asTypeName().javaToKotlinType() as? ClassName)?.let { builder.addAnnotation(it) } } }
+        } catch (e: Exception) {
+            builder.addAnnotation(DslFieldMarker::class)
+        }
+        return builder
+            .addParameter("block", variable.asType().asTypeName().javaToKotlinType2())
             .addStatement("${variable.simpleName} = block")
             .build()
     }
 
     override fun getSupportedAnnotationTypes(): MutableSet<String> = mutableSetOf(DslField::class.java.canonicalName)
 }
+
+object APUtils {
+    fun getTypeMirrorFromAnnotationValue(c: GetClassValue): List<TypeMirror?>? {
+        try {
+            c.execute()
+        } catch (ex: MirroredTypesException) {
+            return ex.typeMirrors
+        }
+        return null
+    }
+
+    @FunctionalInterface
+    interface GetClassValue {
+        @Throws(MirroredTypeException::class, MirroredTypesException::class)
+        fun execute()
+    }
+}
+
+annotation class MyAnnotationType(vararg val value: KClass<*> = [])
 
 fun Messager.errormessage(message: () -> String) {
     this.printMessage(javax.tools.Diagnostic.Kind.ERROR, message())
@@ -150,4 +130,39 @@ fun Messager.noteMessage(message: () -> String) {
 
 fun Messager.warningMessage(message: () -> String) {
     this.printMessage(javax.tools.Diagnostic.Kind.WARNING, message())
+}
+
+fun Element.javaToKotlinType(): TypeName = asType().asTypeName().javaToKotlinType()
+
+fun TypeName.javaToKotlinType(): TypeName {
+    return if (this is ParameterizedTypeName) {
+        (rawType.javaToKotlinType() as ClassName).parameterizedBy(*typeArguments.map { it.javaToKotlinType() }.toTypedArray())
+    } else {
+        val className = JavaToKotlinClassMap.mapJavaToKotlin(FqName(toString()))?.asSingleFqName()?.asString()
+        return if (className == null) {
+            this
+        } else {
+            ClassName.bestGuess(className)
+        }
+    }
+}
+
+private fun TypeName.javaToKotlinType2(): TypeName {
+    return when (this) {
+        is ParameterizedTypeName ->
+            (rawType.javaToKotlinType2() as ClassName).parameterizedBy(*typeArguments.map { it.javaToKotlinType2() }.toTypedArray())
+        is WildcardTypeName ->
+            if (inTypes.isNotEmpty())
+                WildcardTypeName.consumerOf(inTypes[0].javaToKotlinType2())
+            else
+                WildcardTypeName.producerOf(outTypes[0].javaToKotlinType2())
+        else -> {
+            val className = JavaToKotlinClassMap.mapJavaToKotlin(FqName(toString()))?.asSingleFqName()?.asString()
+            if (className == null) {
+                this
+            } else {
+                ClassName.bestGuess(className)
+            }
+        }
+    }
 }
